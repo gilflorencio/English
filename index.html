@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundGuess 3000 Words</title>
+    <style>
+        :root { --primary: #6366f1; --bg: #f8fafc; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 2.5rem; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); text-align: center; width: 90%; max-width: 450px; }
+        .btn-audio { background: var(--primary); color: white; border: none; width: 100px; height: 100px; border-radius: 50%; font-size: 2.5rem; cursor: pointer; margin-bottom: 2rem; box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4); }
+        .btn-audio:active { transform: scale(0.95); }
+        .options { display: grid; gap: 12px; }
+        .option { background: white; border: 2px solid #e2e8f0; padding: 16px; border-radius: 12px; font-size: 1.1rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .option:hover { border-color: var(--primary); background: #f5f7ff; }
+        .correct { background: #22c55e !important; color: white; border-color: #16a34a; }
+        .wrong { background: #ef4444 !important; color: white; border-color: #dc2626; }
+        #status { margin-top: 1.5rem; color: #64748b; font-size: 0.9rem; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="card" id="game-card">
+        <div id="loader-container">
+            <div class="loader"></div>
+            <p>Cargando 3000 palabras...</p>
+        </div>
+        <div id="game-content" style="display:none;">
+            <h2 style="margin-top:0">Escucha y elige</h2>
+            <button class="btn-audio" onclick="reproducir()">🔊</button>
+            <div id="options" class="options"></div>
+            <p id="status">Puntos: 0 | Palabras cargadas: <span id="word-count">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        let diccionario = [];
+        let palabraActual = {};
+        let puntos = 0;
+
+        // Conexión a un repositorio de vocabulario (Oxford 3000 simplificado)
+        async function cargarVocabulario() {
+            try {
+                // Usamos una fuente de GitHub con vocabulario común En-Es
+                const response = await fetch('https://raw.githubusercontent.com/mwinteringham/wordlist-json/master/words.json');
+                const data = await response.json();
+                
+                // Formateamos los datos (esto depende de la estructura del JSON que bajamos)
+                // Para este ejemplo, simulamos la carga de una lista extensa
+                diccionario = Object.entries(data).map(([en, es]) => ({ en, es }));
+                
+                if (diccionario.length < 10) throw new Error("Lista corta");
+                
+                document.getElementById('word-count').innerText = diccionario.length;
+                document.getElementById('loader-container').style.display = 'none';
+                document.getElementById('game-content').style.display = 'block';
+                siguientePregunta();
+            } catch (error) {
+                // Si falla la red, usamos un plan B con palabras comunes
+                diccionario = [
+                    {en: "Relationship", es: "Relación"}, {en: "Development", es: "Desarrollo"},
+                    {en: "Opportunity", es: "Oportunidad"}, {en: "Knowledge", es: "Conocimiento"},
+                    {en: "Everything", es: "Todo"}, {en: "Something", es: "Algo"}
+                    // ... se podrían añadir más aquí
+                ];
+                document.getElementById('loader-container').innerHTML = "<p style='color:red'>Usando modo offline (Error de conexión)</p>";
+                setTimeout(() => {
+                    document.getElementById('loader-container').style.display = 'none';
+                    document.getElementById('game-content').style.display = 'block';
+                    siguientePregunta();
+                }, 2000);
+            }
+        }
+
+        function siguientePregunta() {
+            const index = Math.floor(Math.random() * diccionario.length);
+            palabraActual = diccionario[index];
+
+            let opciones = [palabraActual.es];
+            while(opciones.length < 4) {
+                let randomWord = diccionario[Math.floor(Math.random() * diccionario.length)].es;
+                if(!opciones.includes(randomWord)) opciones.push(randomWord);
+            }
+            opciones.sort(() => Math.random() - 0.5);
+
+            const container = document.getElementById('options');
+            container.innerHTML = '';
+            opciones.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option';
+                btn.innerText = opt;
+                btn.onclick = () => verificar(opt, btn);
+                container.appendChild(btn);
+            });
+            reproducir();
+        }
+
+        function reproducir() {
+            const synth = window.speechSynthesis;
+            const utter = new SpeechSynthesisUtterance(palabraActual.en);
+            utter.lang = 'en-US';
+            utter.rate = 0.9; // Un poco más lento para ayudar al aprendizaje
+            synth.speak(utter);
+        }
+
+        function verificar(res, btn) {
+            const btns = document.querySelectorAll('.option');
+            btns.forEach(b => b.disabled = true);
+
+            if(res === palabraActual.es) {
+                btn.classList.add('correct');
+                puntos++;
+            } else {
+                btn.classList.add('wrong');
+                // Marcar la correcta para que el usuario aprenda
+                btns.forEach(b => { if(b.innerText === palabraActual.es) b.classList.add('correct'); });
+            }
+
+            document.getElementById('status').innerHTML = `Puntos: ${puntos} | Palabras cargadas: ${diccionario.length}`;
+            setTimeout(siguientePregunta, 2000);
+        }
+
+        cargarVocabulario();
+    </script>
+</body>
+</html>
